@@ -5,7 +5,13 @@ import User from "../models/user.model";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../lib/utils";
 import cloudinary from "../lib/cloudinary";
-import { allowedNodeEnvironmentFlags } from "node:process";
+export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
+  res.status(200).json({
+    message: "successfully fetched your profile",
+    data: req.user,
+    success: true,
+  });
+});
 export const signUp = asyncHandler(async (req: Request, res: Response) => {
   if (!req.body?.fullName || !req.body?.email || !req.body?.password)
     throw new AppError("All the credentials are required", 400);
@@ -43,6 +49,8 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const signIn = asyncHandler(async (req: Request, res: Response) => {
+  console.log("req", req.body);
+
   const { email, password } = req.body;
   if (!email || !password)
     throw new AppError("email and password is required", 400);

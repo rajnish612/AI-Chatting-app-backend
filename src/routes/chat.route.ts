@@ -1,6 +1,7 @@
 import express from "express";
 import { verifyToken } from "../middleware/auth.middleware";
-import { getMessages } from "../controllers/message.controller";
+import { getChats } from "../controllers/chat.controller";
 const router = express.Router();
-router.route("/get-messages").get(verifyToken, getMessages);
+
+router.get("/get-chats", verifyToken, getChats);
 export default router;

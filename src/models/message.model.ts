@@ -1,25 +1,29 @@
 import mongoose from "mongoose";
-interface IMessage {
+export interface IMessage {
   _id: mongoose.Schema.Types.ObjectId;
   senderId: mongoose.Schema.Types.ObjectId;
-  receiverId: mongoose.Types.ObjectId;
+  receiver: mongoose.Types.ObjectId[];
   text: string;
   image: string;
   createdAt: Date;
   updatedAt: Date;
+  chatId: mongoose.Schema.Types.ObjectId;
 }
 const messageSchema = new mongoose.Schema<IMessage>(
   {
+    chatId: { type: mongoose.Schema.Types.ObjectId, ref: "Chats" },
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    receiverId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
+    receiver: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+    ],
     text: { type: String, default: "" },
     image: { type: String, default: "" },
   },
