@@ -8,6 +8,7 @@ export interface IMessage {
   createdAt: Date;
   updatedAt: Date;
   chatId: mongoose.Schema.Types.ObjectId;
+  seenBy?: mongoose.Schema.Types.ObjectId[];
 }
 const messageSchema = new mongoose.Schema<IMessage>(
   {
@@ -20,6 +21,7 @@ const messageSchema = new mongoose.Schema<IMessage>(
 
     text: { type: String, default: "" },
     image: { type: String, default: "" },
+    seenBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   {
     timestamps: true,

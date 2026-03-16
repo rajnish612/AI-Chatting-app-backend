@@ -27,7 +27,6 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
   if (user) throw new AppError("Email already exists.", 400);
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(password, salt);
-  console.log(req.body);
   const newUser = new User({
     fullName,
     email,
