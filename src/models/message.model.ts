@@ -18,10 +18,15 @@ const messageSchema = new mongoose.Schema<IMessage>(
       ref: "User",
       required: true,
     },
-
+    seenBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+    ],
     text: { type: String, default: "" },
     image: { type: String, default: "" },
-    seenBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   {
     timestamps: true,

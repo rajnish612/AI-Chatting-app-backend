@@ -9,8 +9,12 @@ enum LastMessageType {
   VIDEO = "video",
   TEXT = "text",
 }
+type Participant = {
+  userId: mongoose.Types.ObjectId;
+  lastSeen: Date;
+};
 export interface IChat {
-  participants: Array<mongoose.Schema.Types.ObjectId>;
+  participants: Participant[];
   lastMessage: string;
   lastMessageType: LastMessageType;
   type: ChatType;
@@ -22,7 +26,17 @@ const chatSchema = new mongoose.Schema<IChat>(
   {
     name: { type: String, default: "" },
     participants: [
-      { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          index: true,
+        },
+        lastSeen: {
+          type: Date,
+          default: new Date(0),
+        },
+      },
     ],
     lastMessageType: {
       type: String,
