@@ -4,6 +4,7 @@ import { ApiResponse } from "../lib/ApiResponse";
 import { Request, Response } from "express";
 import AppError from "../lib/AppError";
 import Message, { IMessage } from "../models/message.model";
+import { Types } from "mongoose";
 export const getChats = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user._id;
@@ -13,7 +14,9 @@ export const getChats = asyncHandler(
 
     const filteredChats = chats.map((chat) => ({
       ...chat,
-      participants: chat.participants.filter((_id) => _id !== userId),
+      participants: chat.participants.filter(
+        (_id) => _id.toString() !== userId.toString(),
+      ),
     }));
     const response: ApiResponse<IChat[]> = {
       success: true,
@@ -40,11 +43,26 @@ export const getUnseenCount = asyncHandler(
       data: unseenCount,
       message: "successfully fetched chats",
     };
-    console.log("unseencount", unseenCount);
 
     res.status(200).json(response);
   },
 );
 
+export const getParticipants = asyncHandler(
+  async (req: Request, res: Response) => {
+    const chatId = req.query.chatId;
+    const userId = req.user._id;
+
+    if (!chatId) throw new AppError("Unable to fetch chats", 400);
+
+    const chat = await Chat.findById(chatId).select("participants").lean();
+    const response: ApiResponse<Types.ObjectId> = {
+      success: true,
+      data: chat.participants,
+      message: "successfully fetched chats",
+    };
+    res.status(200).json(response);
+  },
+);
 export const getGroupChats = () => {};
 export const getUnreadChats = () => {};
