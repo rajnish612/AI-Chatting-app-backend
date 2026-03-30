@@ -14,6 +14,7 @@ type Participant = {
   lastSeen: Date;
 };
 export interface IChat {
+  _id: mongoose.Types.ObjectId;
   participants: Participant[];
   lastMessage: string;
   lastMessageType: LastMessageType;

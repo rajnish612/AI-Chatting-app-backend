@@ -12,7 +12,28 @@ export const getChats = asyncHandler(
     const chats = await Chat.find({ "participants.userId": userId })
       .populate("participants.userId", "_id fullName profilePic")
       .lean<IChat[]>();
-    const filteredChats = chats.map((chat) => ({
+
+    const chatsWithUnread = await Promise.all(
+      chats.map(async (chat) => {
+        // Find current user's participant record to get their lastSeen
+        const userParticipant = chat.participants.find(
+          (p) => p.userId._id.toString() === userId.toString(),
+        );
+
+        const unseenCount = await Message.countDocuments({
+          chatId: chat._id,
+          createdAt: { $gt: userParticipant?.lastSeen || new Date(0) },
+          senderId: { $ne: userId },
+        });
+
+        return {
+          ...chat,
+          unseenCount,
+        };
+      }),
+    );
+
+    const filteredChats = chatsWithUnread.map((chat) => ({
       ...chat,
       participants: chat.participants.filter(
         (participant) =>
@@ -40,9 +61,13 @@ export const getParticipants = asyncHandler(
       .select("participants")
       .populate("participants.userId", "_id fullName profilePic")
       .lean();
+    const filteredParticipants = chat?.participants.filter(
+      (participant: any) =>
+        participant.userId._id.toString() !== userId.toString(),
+    );
     const response: ApiResponse<Types.ObjectId> = {
       success: true,
-      data: chat.participants,
+      data: filteredParticipants,
       message: "successfully fetched chats",
     };
 

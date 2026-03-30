@@ -15,11 +15,15 @@ io.on("connection", (socket) => {
     socket.join(_id);
   });
   socket.on("join-chat", ({ chatId }) => {
-
     socket.join(chatId);
   });
-  socket.on("send-message", ({ chatId, message }) => {
+  socket.on("send-message", ({ chatId, message, participants }) => {
 
+    participants.forEach((participant: { userId: { _id: string } }) => {
+      socket.to(participant.userId._id.toString()).emit("count-unseen", {
+        chatId,
+      });
+    });
     socket.to(chatId).emit("receive-message", { message });
   });
   socket.on("disconnect", () => {
