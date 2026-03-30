@@ -5,6 +5,7 @@ import { Request, Response } from "express";
 import AppError from "../lib/AppError";
 import Message, { IMessage } from "../models/message.model";
 import { Types } from "mongoose";
+import { io } from "../lib/socketInstance";
 export const getChats = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user._id;
@@ -45,6 +46,31 @@ export const getParticipants = asyncHandler(
       message: "successfully fetched chats",
     };
 
+    res.status(200).json(response);
+  },
+);
+export const updateLastSeen = asyncHandler(
+  async (req: Request, res: Response) => {
+    const chatId = req.query.chatId;
+    const userId = req.user._id;
+    if (!chatId) throw new AppError("Unable to fetch chats", 400);
+    const chat = await Chat.findOneAndUpdate(
+      { _id: chatId, "participants.userId": userId },
+      { $set: { "participants.$.lastSeen": new Date() } },
+      { returnDocument: "after" },
+    )
+      .populate("participants.userId", "_id fullName profilePic")
+      .select("participants")
+      .lean();
+    io.to(chatId?.toString()).emit("message-seen", {
+      userId,
+      lastSeen: new Date(),
+    });
+    const response: ApiResponse<IChat> = {
+      success: true,
+      data: chat,
+      message: "successfully fetched chats",
+    };
     res.status(200).json(response);
   },
 );
