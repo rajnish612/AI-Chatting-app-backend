@@ -32,6 +32,25 @@ export const sendTextMessage = asyncHandler(
       text: message,
       senderId: userId,
     });
+    const updatedChat = await Chat.findByIdAndUpdate(
+      chatId,
+      {
+        $set: { lastMessage: newMessage._id, lastMessageAt: new Date() },
+      },
+      { returnDocument: "after" },
+    )
+      .populate("lastMessage")
+      .populate("participants.userId", "_id fullName profilePic")
+      .lean();
+
+    updatedChat.participants.forEach(
+      (participant: { userId: { _id: string } }) => {
+        io.to(participant.userId._id.toString()).emit("chat-update", {
+          chatId,
+          updatedChat,
+        });
+      },
+    );
     const response: ApiResponse<IMessage> = {
       success: true,
       data: newMessage,

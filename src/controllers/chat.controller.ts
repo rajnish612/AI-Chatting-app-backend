@@ -11,6 +11,8 @@ export const getChats = asyncHandler(
     const userId = req.user._id;
     const chats = await Chat.find({ "participants.userId": userId })
       .populate("participants.userId", "_id fullName profilePic")
+      .populate("lastMessage")
+      .sort({ lastMessageAt: -1 })
       .lean<IChat[]>();
 
     const chatsWithUnread = await Promise.all(
@@ -33,17 +35,9 @@ export const getChats = asyncHandler(
       }),
     );
 
-    const filteredChats = chatsWithUnread.map((chat) => ({
-      ...chat,
-      participants: chat.participants.filter(
-        (participant) =>
-          participant.userId._id.toString() !== userId.toString(),
-      ),
-    }));
-
     const response: ApiResponse<IChat[]> = {
       success: true,
-      data: filteredChats,
+      data: chatsWithUnread,
       message: "successfully fetched chats",
     };
     res.status(200).json(response);

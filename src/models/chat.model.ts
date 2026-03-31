@@ -3,12 +3,7 @@ enum ChatType {
   PRIVATE = "private",
   GROUP = "group",
 }
-enum LastMessageType {
-  AUDIO = "audio",
-  IMAGE = "image",
-  VIDEO = "video",
-  TEXT = "text",
-}
+
 type Participant = {
   userId: mongoose.Types.ObjectId;
   lastSeen: Date;
@@ -16,8 +11,8 @@ type Participant = {
 export interface IChat {
   _id: mongoose.Types.ObjectId;
   participants: Participant[];
-  lastMessage: string;
-  lastMessageType: LastMessageType;
+  lastMessage: mongoose.Types.ObjectId;
+  lastMessageAt: Date;
   type: ChatType;
   createdAt: Date;
   updatedAt: Date;
@@ -39,11 +34,12 @@ const chatSchema = new mongoose.Schema<IChat>(
         },
       },
     ],
-    lastMessageType: {
-      type: String,
-      enum: Object.values(LastMessageType),
+    lastMessageAt: { type: Date, default: null },
+    lastMessage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
     },
-
     type: {
       type: String,
       enum: Object.values(ChatType),

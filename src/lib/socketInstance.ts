@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import { createServer } from "node:http";
 import express from "express";
+import Chat from "../models/chat.model";
 const app = express();
 const server = createServer(app);
 
@@ -17,13 +18,9 @@ io.on("connection", (socket) => {
   socket.on("join-chat", ({ chatId }) => {
     socket.join(chatId);
   });
-  socket.on("send-message", ({ chatId, message, participants }) => {
+  socket.on("send-message", async ({ chatId, message }) => {
+   
 
-    participants.forEach((participant: { userId: { _id: string } }) => {
-      socket.to(participant.userId._id.toString()).emit("count-unseen", {
-        chatId,
-      });
-    });
     socket.to(chatId).emit("receive-message", { message });
   });
   socket.on("disconnect", () => {

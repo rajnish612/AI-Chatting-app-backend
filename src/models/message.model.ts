@@ -4,6 +4,7 @@ export interface IMessage {
   senderId: mongoose.Schema.Types.ObjectId;
   receiver: mongoose.Types.ObjectId[];
   text: string;
+  type: "text" | "image" | "video" | "audio";
   image: string;
   createdAt: Date;
   updatedAt: Date;
@@ -17,6 +18,11 @@ const messageSchema = new mongoose.Schema<IMessage>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    type: {
+      type: String,
+      enum: ["text", "image", "video", "audio"],
+      default: "text",
     },
     seenBy: [
       {
