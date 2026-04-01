@@ -14,15 +14,25 @@ export const getChats = asyncHandler(
       .populate("lastMessage")
       .sort({ lastMessageAt: -1 })
       .lean<IChat[]>();
+    const filteredChats = chats.filter((chat) => {
+      const deletedEntry = chat?.deletedFor?.find(
+        (del) => del.userId.toString() === userId.toString(),
+      );
 
+      if (!deletedEntry) return true;
+
+      if (!chat.lastMessage) return false;
+
+      return chat.lastMessage.createdAt > deletedEntry.deletedAt;
+    });
     const chatsWithUnread = await Promise.all(
-      chats.map(async (chat) => {
+      filteredChats.map(async (chat) => {
         // Find current user's participant record to get their lastSeen
         const userParticipant = chat.participants.find(
           (p) => p.userId._id.toString() === userId.toString(),
         );
 
-        const unseenCount = await Message.countDocuments({
+        const unseenCount: number = await Message.countDocuments({
           chatId: chat._id,
           createdAt: { $gt: userParticipant?.lastSeen || new Date(0) },
           senderId: { $ne: userId },
@@ -59,7 +69,7 @@ export const getParticipants = asyncHandler(
       (participant: any) =>
         participant.userId._id.toString() !== userId.toString(),
     );
-    const response: ApiResponse<Types.ObjectId> = {
+    const response: ApiResponse<Types.ObjectId[]> = {
       success: true,
       data: filteredParticipants,
       message: "successfully fetched chats",
@@ -93,5 +103,35 @@ export const updateLastSeen = asyncHandler(
     res.status(200).json(response);
   },
 );
+export const deleteChat = asyncHandler(async (req: Request, res: Response) => {
+  const chatId = req.query.chatId;
+  const userId = req.user._id;
+  if (!chatId) throw new AppError("Unable to fetch chats", 400);
+  let chat = await Chat.findOneAndUpdate(
+    { _id: chatId, "deletedFor.userId": userId },
+    {
+      $set: { "deletedFor.$.deletedAt": new Date() },
+    },
+    { returnDocument: "after" },
+  )
+    .populate("participants.userId", "_id fullName profilePic")
+    .lean();
+  if (!chat) {
+    chat = await Chat.findByIdAndUpdate(
+      chatId,
+      {
+        $push: { deletedFor: { userId, deletedAt: new Date() } },
+      },
+      { returnDocument: "after" },
+    );
+  }
+
+  const response: ApiResponse<IChat> = {
+    success: true,
+    data: chat,
+    message: "successfully deleted chat",
+  };
+  res.status(200).json(response);
+});
 export const getGroupChats = () => {};
 export const getUnreadChats = () => {};

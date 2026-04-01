@@ -11,7 +11,17 @@ export const getMessages = asyncHandler(async (req: Request, res: Response) => {
   const chatId = req.query.chatId;
 
   if (!chatId) throw new AppError("Unable to fetch chats", 400);
-  const messages = await Message.find({ chatId }).lean<IMessage>();
+  const chat = await Chat.findById(chatId).lean();
+
+  const deletedEntry = chat.deletedFor.find(
+    (del) => del.userId.toString() === userId.toString(),
+  );
+
+  const deletedAt = deletedEntry?.deletedAt;
+  const messages = await Message.find({
+    chatId,
+    ...(deletedAt && { createdAt: { $gt: deletedAt } }),
+  }).lean<IMessage>();
 
   res.status(200).json({
     message: "successfully fetched messages",
@@ -91,7 +101,7 @@ export const unsendMessage = asyncHandler(
       .lean();
     updatedChat.participants.forEach(
       (participant: { userId: { _id: string } }) => {
-        io.to(participant.userId._id.toString()).emit("chat-update", {
+        io.to(participant.userId._id.toString()).emit("message-unsend", {
           chatId: lastMessage.chatId,
           updatedChat,
         });

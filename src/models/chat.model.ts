@@ -11,9 +11,15 @@ type Participant = {
 export interface IChat {
   _id: mongoose.Types.ObjectId;
   participants: Participant[];
-  lastMessage: mongoose.Types.ObjectId;
+  lastMessage: {
+    _id: mongoose.Types.ObjectId;
+    text: string;
+    senderId: mongoose.Types.ObjectId;
+    createdAt: Date;
+  };
   lastMessageAt: Date;
   type: ChatType;
+  deletedFor: { userId: mongoose.Types.ObjectId; deletedAt: Date }[];
   createdAt: Date;
   updatedAt: Date;
   name?: string;
@@ -44,6 +50,18 @@ const chatSchema = new mongoose.Schema<IChat>(
       type: String,
       enum: Object.values(ChatType),
     },
+    deletedFor: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        deletedAt: {
+          type: Date,
+          default: null,
+        },
+      },
+    ],
   },
 
   { timestamps: true },
