@@ -103,6 +103,31 @@ export const updateLastSeen = asyncHandler(
     res.status(200).json(response);
   },
 );
+export const createOrGetPrivateChat = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { userId: otherUserId } = req.body;
+    const userId = req.user._id;
+    if (!otherUserId) throw new AppError("otherUserId is required", 400);
+    let chat = await Chat.findOne({
+      type: "private",
+      participants: {
+        $all: [userId, otherUserId],
+      },
+    });
+    if (!chat) {
+      chat = await Chat.create({
+        type: "private",
+        participants: [userId, otherUserId],
+      });
+    }
+    const response: ApiResponse<IChat> = {
+      success: true,
+      data: chat,
+      message: "successfully fetched chats",
+    };
+    res.status(200).json(response);
+  },
+);
 export const deleteChat = asyncHandler(async (req: Request, res: Response) => {
   const chatId = req.query.chatId;
   const userId = req.user._id;
