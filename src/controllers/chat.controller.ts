@@ -6,6 +6,53 @@ import AppError from "../lib/AppError";
 import Message, { IMessage } from "../models/message.model";
 import { Types } from "mongoose";
 import { io } from "../lib/socketInstance";
+import User from "../models/user.model";
+
+export const searchChats = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user._id;
+  const query = req.query.q as string;
+  if (!query) throw new AppError("Query is missing", 400);
+
+  const matchedUsers = await User.find({
+    _id: { $ne: userId },
+    fullName: { $regex: query, $options: "i" },
+  }).select("_id");
+
+  if (!matchedUsers.length) {
+    const response: ApiResponse<IChat[]> = {
+      success: true,
+      data: [],
+      message: "successfully fetched chats",
+    };
+    res.status(200).json(response);
+    return;
+  }
+
+  const chats = await Chat.find({
+    type: "private",
+    participants: {
+      $all: [
+        { $elemMatch: { userId } },
+        {
+          $elemMatch: {
+            userId: { $in: matchedUsers.map((user) => user._id) },
+          },
+        },
+      ],
+    },
+  })
+    .populate("participants.userId", "_id fullName profilePic")
+    .populate("lastMessage")
+    .sort({ lastMessageAt: -1 })
+    .lean<IChat[]>();
+
+  const response: ApiResponse<IChat[]> = {
+    success: true,
+    data: chats,
+    message: "successfully fetched chats",
+  };
+  res.status(200).json(response);
+});
 export const getChats = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user._id;
