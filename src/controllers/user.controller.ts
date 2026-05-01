@@ -16,8 +16,10 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
   };
   res.status(200).json(response);
 });
-export const getFriends = asyncHandler(async (req: Request, res: Response) => {
-  const users = await User.find({ _id: { $ne: req.user._id } }).select(
+
+export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user._id;
+  const users = await User.find({ _id: { $ne: userId } }).select(
     "_id fullName profilePic",
   );
   const response: ApiResponse<IUser[]> = {

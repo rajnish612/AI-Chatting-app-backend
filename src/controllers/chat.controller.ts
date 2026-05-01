@@ -112,6 +112,7 @@ export const getParticipants = asyncHandler(
       .select("participants")
       .populate("participants.userId", "_id fullName profilePic")
       .lean();
+
     const filteredParticipants = chat?.participants.filter(
       (participant: any) =>
         participant.userId._id.toString() !== userId.toString(),
@@ -152,19 +153,26 @@ export const updateLastSeen = asyncHandler(
 );
 export const createOrGetPrivateChat = asyncHandler(
   async (req: Request, res: Response) => {
-    const { userId: otherUserId } = req.body;
+    const { userId: otherUserId } = req.query as { userId: string };
+
     const userId = req.user._id;
     if (!otherUserId) throw new AppError("otherUserId is required", 400);
     let chat = await Chat.findOne({
       type: "private",
       participants: {
-        $all: [userId, otherUserId],
+        $all: [
+          { $elemMatch: { userId: userId } },
+          { $elemMatch: { userId: otherUserId } },
+        ],
       },
     });
     if (!chat) {
       chat = await Chat.create({
         type: "private",
-        participants: [userId, otherUserId],
+        participants: [
+          { userId: userId, lastSeen: new Date(Date.now() - 1000) },
+          { userId: otherUserId, lastSeen: new Date() },
+        ],
       });
     }
     const response: ApiResponse<IChat> = {
