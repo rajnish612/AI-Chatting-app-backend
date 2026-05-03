@@ -32,7 +32,7 @@ export const searchChats = asyncHandler(async (req: Request, res: Response) => {
     type: "private",
     participants: {
       $all: [
-        { $elemMatch: { userId } },
+        { $elemMatch: { userId} },
         {
           $elemMatch: {
             userId: { $in: matchedUsers.map((user) => user._id) },
@@ -45,10 +45,20 @@ export const searchChats = asyncHandler(async (req: Request, res: Response) => {
     .populate("lastMessage")
     .sort({ lastMessageAt: -1 })
     .lean<IChat[]>();
+ const filteredChats = chats.filter((chat) => {
+      const deletedEntry = chat?.deletedFor?.find(
+        (del) => del.userId.toString() === userId.toString(),
+      );
 
+      if (!deletedEntry) return true;
+
+      if (!chat.lastMessage) return false;
+
+      return chat.lastMessage.createdAt > deletedEntry.deletedAt;
+    });
   const response: ApiResponse<IChat[]> = {
     success: true,
-    data: chats,
+    data: filteredChats,
     message: "successfully fetched chats",
   };
   res.status(200).json(response);
