@@ -3,6 +3,7 @@ import authRoutes from "./routes/auth.route.js";
 import dotenv from "dotenv";
 import { connectDb } from "./lib/db.js";
 import cors from "cors";
+import { ExpressPeerServer } from "peer";
 import cookieParser from "cookie-parser";
 import chatRoutes from "./routes/chat.route.js";
 import userRoutes from "./routes/user.route.js";
@@ -11,6 +12,7 @@ import messageRoutes from "./routes/message.route.js";
 import { globalErrorHandler } from "./lib/globalErrorHandler.js";
 dotenv.config();
 const PORT = process.env.PORT;
+const peerServer = ExpressPeerServer(server);
 
 app.use(
   cors({
@@ -25,6 +27,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/user", userRoutes);
+app.use("/peerjs", peerServer);
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;
   res
