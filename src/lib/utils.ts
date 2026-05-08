@@ -20,7 +20,7 @@ export const generateToken = ({
   res.cookie("token", token, {
     maxAge: 30 * 24 * 60 * 60 * 1000,
     secure: process.env.PRODUCTION === "false" ? false : true,
-    sameSite: "strict",
+     sameSite: "none",
     httpOnly: true,
   });
   return token;

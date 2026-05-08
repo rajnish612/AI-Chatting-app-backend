@@ -63,6 +63,7 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
     fullName: user.fullName,
     email: user.email,
     profilePic: user.profilePic,
+    success:true,
   });
 });
 
