@@ -63,13 +63,13 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
     fullName: user.fullName,
     email: user.email,
     profilePic: user.profilePic,
-    success:true,
+    success: true,
   });
 });
 
 export const signOut = asyncHandler(async (req: Request, res: Response) => {
   res.cookie("token", "", { maxAge: 0 });
-  res.json({ message: "Sign out successful" });
+  res.json({ message: "Sign out successful", success: true });
 });
 
 export const updateProfile = asyncHandler(
