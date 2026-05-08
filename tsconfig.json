@@ -2,12 +2,13 @@
   // Visit https://aka.ms/tsconfig to read more about this file
  "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
+    "module": "CommonJS",
     "moduleResolution": "Node",
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true
   },
   "include": ["src"]

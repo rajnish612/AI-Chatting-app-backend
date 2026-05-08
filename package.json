@@ -8,7 +8,7 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts"
   },
-  "type": "module",
+  "type": "commonjs",
   "keywords": [],
   "author": "",
   "license": "ISC",
