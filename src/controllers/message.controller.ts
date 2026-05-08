@@ -14,7 +14,8 @@ export const getMessages = asyncHandler(async (req: Request, res: Response) => {
   const chat = await Chat.findById(chatId).lean();
 
   const deletedEntry = chat.deletedFor.find(
-    (del) => del.userId.toString() === userId.toString(),
+    (del: { userId: Types.ObjectId; deletedAt?: Date }) =>
+      del.userId.toString() === userId.toString(),
   );
 
   const deletedAt = deletedEntry?.deletedAt;

@@ -6,6 +6,7 @@ export const connectDb = async () => {
   try {
     const conn = await mongoose.connect(MONGODB_URI);
   } catch (err) {
-    throw new Error(err);
+    if (err instanceof Error) throw err;
+    throw new Error(String(err));
   }
 };

@@ -15,7 +15,9 @@ export const verifyToken = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     const token = req.cookies.token;
     if (!token) throw new AppError("Unauthorized", 401);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) throw new AppError("Unauthorized", 401);
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string } | null;
     if (!decoded || !decoded.userId) throw new AppError("Unauthorized", 401);
     const user = await User.findById(decoded.userId).select("-password");
     if (!user) throw new AppError("Unauthorized", 401);
