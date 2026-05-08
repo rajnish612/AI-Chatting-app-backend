@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Server } from "socket.io";
 import { createServer } from "node:http";
 import express from "express";
@@ -7,7 +8,7 @@ const server = createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: " http://localhost:5173",
+    origin: process.env.CLIENT_URI,
     credentials: true,
   },
 });
@@ -19,8 +20,6 @@ io.on("connection", (socket) => {
     socket.join(chatId);
   });
   socket.on("send-message", async ({ chatId, message }) => {
-   
-
     socket.to(chatId).emit("receive-message", { message });
   });
   socket.on("disconnect", () => {

@@ -16,7 +16,8 @@ const peerServer = ExpressPeerServer(server);
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URI,
+
     credentials: true,
   }),
 );
