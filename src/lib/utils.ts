@@ -19,7 +19,7 @@ export const generateToken = ({
   if (!token) throw new AppError("Unable to generate token", 500);
   res.cookie("token", token, {
     maxAge: 30 * 24 * 60 * 60 * 1000,
-    secure: process.env.PRODUCTION === "false" ? false : true,
+    secure: true,
      sameSite: "none",
     httpOnly: true,
   });
