@@ -17,10 +17,11 @@ export const generateToken = ({
     expiresIn: "30d",
   });
   if (!token) throw new AppError("Unable to generate token", 500);
+  const isProduction = process.env.NODE_ENV === "production" || process.env.PRODUCTION === "true";
   res.cookie("token", token, {
     maxAge: 30 * 24 * 60 * 60 * 1000,
-    secure: true,
-     sameSite: "none",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     httpOnly: true,
   });
   return token;
