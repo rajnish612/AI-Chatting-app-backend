@@ -68,7 +68,12 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const signOut = asyncHandler(async (req: Request, res: Response) => {
-  res.cookie("token", "", { maxAge: 0 });
+  const isProduction = process.env.NODE_ENV === "production" || process.env.PRODUCTION === "true";
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+  });
   res.json({ message: "Sign out successful", success: true });
 });
 
