@@ -13,14 +13,15 @@ declare global {
 }
 export const verifyToken = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
-    const cookies = JSON.stringify(req.cookies);
+    // Read token from Authorization header: Bearer <token>
+    const authHeader = req.get('authorization');
     const userAgent = req.get('user-agent')?.substring(0, 50) || 'unknown';
-    console.log(`[Auth Middleware] Cookies: ${cookies} | UA: ${userAgent}`);
-    const token = req.cookies.token;
-    if (!token) {
-      console.log(`[Auth Middleware] No token cookie found`);
+    console.log(`[Auth Middleware] Authorization header: ${authHeader ? 'present' : 'missing'} | UA: ${userAgent}`);
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log(`[Auth Middleware] No valid Authorization header`);
       throw new AppError("Unauthorized", 401);
     }
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
     console.log(`[Auth Middleware] Token found, verifying...`);
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) throw new AppError("Unauthorized", 401);

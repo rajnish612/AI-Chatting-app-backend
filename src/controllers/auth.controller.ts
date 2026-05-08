@@ -6,7 +6,9 @@ import bcrypt from "bcryptjs";
 import { generateToken } from "../lib/utils";
 import cloudinary from "../lib/cloudinary";
 export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
-  console.log(`[Auth] Check-Auth called for user: ${req.user?._id} | Cookies: ${JSON.stringify(req.cookies)}`);
+  console.log(
+    `[Auth] Check-Auth called for user: ${req.user?._id} | Cookies: ${JSON.stringify(req.cookies)}`,
+  );
   res.status(200).json({
     message: "successfully fetched your profile",
     data: req.user,
@@ -36,12 +38,14 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
   if (newUser) {
     await newUser.save();
 
-    generateToken({ userId: newUser._id, email, res });
+    const token = generateToken({ userId: newUser._id, email });
     res.status(201).json({
       _id: newUser._id,
-      fullName: newUser.fullname,
+      fullName: newUser.fullName,
       email: newUser.email,
       profilePic: newUser.profilePic,
+      token,
+      success: true,
     });
   } else {
     throw new AppError("Unable to create account", 400);
@@ -59,24 +63,22 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
   const passwordMatched = await bcrypt.compare(password, user.password);
   if (!passwordMatched) throw new AppError("password is wrong", 400);
   console.log(`[Auth] Sign-In successful for user: ${user._id}`);
-  const token = generateToken({ userId: user._id, email, res });
-  console.log(`[Auth] Sign-In response prepared, sending user data`);
+  const token = generateToken({ userId: user._id, email });
+  console.log(`[Auth] Sign-In response prepared, sending user data with token`);
   res.status(200).json({
     _id: user._id,
     fullName: user.fullName,
     email: user.email,
     profilePic: user.profilePic,
+    token,
     success: true,
   });
 });
 
 export const signOut = asyncHandler(async (req: Request, res: Response) => {
-  const isProduction = process.env.NODE_ENV === "production" || process.env.PRODUCTION === "true";
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-  });
+  // Token-based auth: client removes token from localStorage
+  // No server-side state to clear
+  console.log(`[Auth] Sign-Out for user: ${req.user?._id}`);
   res.json({ message: "Sign out successful", success: true });
 });
 
