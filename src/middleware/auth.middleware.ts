@@ -13,8 +13,15 @@ declare global {
 }
 export const verifyToken = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
+    const cookies = JSON.stringify(req.cookies);
+    const userAgent = req.get('user-agent')?.substring(0, 50) || 'unknown';
+    console.log(`[Auth Middleware] Cookies: ${cookies} | UA: ${userAgent}`);
     const token = req.cookies.token;
-    if (!token) throw new AppError("Unauthorized", 401);
+    if (!token) {
+      console.log(`[Auth Middleware] No token cookie found`);
+      throw new AppError("Unauthorized", 401);
+    }
+    console.log(`[Auth Middleware] Token found, verifying...`);
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) throw new AppError("Unauthorized", 401);
     const decoded = jwt.verify(token, JWT_SECRET) as { userId?: string } | null;

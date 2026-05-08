@@ -23,6 +23,8 @@ export const generateToken = ({
     secure: isProduction,
     sameSite: isProduction ? "none" : "lax",
     httpOnly: true,
+    path: "/",
   });
+  console.log(`[Token] Set cookie for user ${userId} | Production: ${isProduction} | SameSite: ${isProduction ? "none" : "lax"}`);
   return token;
 };

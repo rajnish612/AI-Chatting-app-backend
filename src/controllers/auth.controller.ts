@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { generateToken } from "../lib/utils";
 import cloudinary from "../lib/cloudinary";
 export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
+  console.log(`[Auth] Check-Auth called for user: ${req.user?._id} | Cookies: ${JSON.stringify(req.cookies)}`);
   res.status(200).json({
     message: "successfully fetched your profile",
     data: req.user,
@@ -48,7 +49,7 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const signIn = asyncHandler(async (req: Request, res: Response) => {
-  console.log("req", req.body);
+  console.log("[Auth] Sign-In request:", req.body);
 
   const { email, password } = req.body;
   if (!email || !password)
@@ -57,7 +58,9 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
   if (!user) throw new AppError("User not found", 400);
   const passwordMatched = await bcrypt.compare(password, user.password);
   if (!passwordMatched) throw new AppError("password is wrong", 400);
+  console.log(`[Auth] Sign-In successful for user: ${user._id}`);
   const token = generateToken({ userId: user._id, email, res });
+  console.log(`[Auth] Sign-In response prepared, sending user data`);
   res.status(200).json({
     _id: user._id,
     fullName: user.fullName,
