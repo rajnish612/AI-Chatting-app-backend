@@ -54,13 +54,26 @@ export const sendTextMessage = asyncHandler(
       .populate("participants.userId", "_id fullName profilePic")
       .lean();
 
-    updatedChat.participants.forEach(
-      (participant: { userId: { _id: string } }) => {
+    await Promise.all(
+      updatedChat.participants.map(async (participant: { userId: { _id: string }; lastSeen?: Date }) => {
+        const participantId = participant.userId._id.toString();
+        const unseenCount =
+          participantId === userId.toString()
+            ? 0
+            : await Message.countDocuments({
+                chatId,
+                createdAt: { $gt: participant.lastSeen || new Date(0) },
+                senderId: { $ne: participant.userId._id },
+              });
+
         io.to(participant.userId._id.toString()).emit("chat-update", {
           chatId,
-          updatedChat,
+          updatedChat: {
+            ...updatedChat,
+            unseenCount,
+          },
         });
-      },
+      }),
     );
     const response: ApiResponse<IMessage> = {
       success: true,
