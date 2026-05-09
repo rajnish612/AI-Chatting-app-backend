@@ -23,10 +23,10 @@ export const sendOtp = async (email: string, otp: string): Promise<boolean> => {
       html: `<p>Your OTP is: <strong>${otp}</strong></p><p>This code will expire in 5 minutes.</p><p>If you did not request this, please ignore this email.</p>`,
     });
 
-    console.log(`[Email] OTP sent successfully to ${email}. Message ID: ${info.messageId}`);
+    
     return true;
   } catch (err) {
-    console.error(`[Email] Error while sending OTP to ${email}:`, err);
+    
     return false;
   }
 };

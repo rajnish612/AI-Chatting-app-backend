@@ -5,6 +5,23 @@ import express from "express";
 import Chat from "../models/chat.model";
 const app = express();
 const server = createServer(app);
+const onlineUserCounts = new Map<string, number>();
+
+export const isUserOnline = (userId: string) => onlineUserCounts.has(userId);
+
+const setUserOnline = (userId: string) => {
+  const currentCount = onlineUserCounts.get(userId) || 0;
+  onlineUserCounts.set(userId, currentCount + 1);
+};
+
+const setUserOffline = (userId: string) => {
+  const currentCount = onlineUserCounts.get(userId) || 0;
+  if (currentCount <= 1) {
+    onlineUserCounts.delete(userId);
+    return;
+  }
+  onlineUserCounts.set(userId, currentCount - 1);
+};
 
 const io = new Server(server, {
   cors: {
@@ -14,7 +31,11 @@ const io = new Server(server, {
 });
 io.on("connection", (socket) => {
   socket.on("join", ({ _id }) => {
+    socket.data.userId = _id;
     socket.join(_id);
+    setUserOnline(_id);
+    socket.emit("online-users", Array.from(onlineUserCounts.keys()));
+    io.emit("presence-update", { userId: _id, isOnline: true });
   });
   socket.on("join-chat", ({ chatId }) => {
     socket.join(chatId);
@@ -23,7 +44,10 @@ io.on("connection", (socket) => {
     socket.to(chatId).emit("receive-message", { message });
   });
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    const userId = socket.data.userId;
+    if (!userId) return;
+    setUserOffline(userId);
+    io.emit("presence-update", { userId, isOnline: false });
   });
 });
 export { app, server, io };

@@ -20,7 +20,7 @@ export const createUser = async (
     email,
     password: await bcrypt.hash(password, salt),
   });
-  console.log("user created", user);
+  
 };
 export const createChat = async (
   participants: string[],

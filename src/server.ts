@@ -15,23 +15,17 @@ const PORT = process.env.PORT;
 app.use(
   cors({
     origin: process.env.CLIENT_URI,
-
     credentials: true,
   }),
 );
-app.use(globalErrorHandler);
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/user", userRoutes);
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  const statusCode = err.statusCode || 500;
-  res
-    .status(statusCode)
-    .json({ message: err.message || "Internal Server Error" });
-});
+app.use(globalErrorHandler);
 
 async function bootstrap() {
   const { ExpressPeerServer } = await import("peer");
@@ -39,12 +33,10 @@ async function bootstrap() {
   app.use("/peerjs", peerServer);
 
   server.listen(PORT, () => {
-    console.log(`server running at port ${PORT}`);
     connectDb();
   });
 }
 
 bootstrap().catch((error) => {
-  console.error("Failed to start server:", error);
   process.exit(1);
 });

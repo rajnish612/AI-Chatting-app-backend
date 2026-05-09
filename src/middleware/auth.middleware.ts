@@ -17,7 +17,6 @@ export const verifyToken = asyncHandler(
     const authHeader = req.get('authorization');
     const userAgent = req.get('user-agent')?.substring(0, 50) || 'unknown';
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log(`[Auth Middleware] No valid Authorization header`);
       throw new AppError("Unauthorized", 401);
     }
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix

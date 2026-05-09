@@ -34,16 +34,25 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(password, salt);
 
-  const otpCode = generateOTP();
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+  const existingOTP = await OTP.findOne({ email });
+  let otpCode: string;
+  let expiresAt: Date;
 
-  await OTP.deleteOne({ email });
+  if (existingOTP && new Date() < existingOTP.expiresAt) {
+    otpCode = existingOTP.otp;
+    expiresAt = existingOTP.expiresAt;
+  } else {
+    otpCode = generateOTP();
+    expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-  await OTP.create({
-    email,
-    otp: otpCode,
-    expiresAt,
-  });
+    await OTP.deleteOne({ email });
+
+    await OTP.create({
+      email,
+      otp: otpCode,
+      expiresAt,
+    });
+  }
 
   const newUser = new User({
     fullName,
@@ -60,7 +69,7 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Failed to send OTP. Please try again.", 500);
   }
 
-  console.log(`[Auth] Sign-Up OTP sent for user: ${newUser._id}`);
+  
   res.status(201).json({
     message: "OTP sent to your email. Please verify to complete signup.",
     email: newUser.email,
@@ -70,7 +79,7 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
 
 export const signIn = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
-  console.log("email", email, "password", password);
+  
 
   if (!email || !password)
     throw new AppError("email and password is required", 400);
@@ -79,9 +88,8 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
   if (!user) throw new AppError("User not found", 400);
   const passwordMatched = await bcrypt.compare(password, user.password);
   if (!passwordMatched) throw new AppError("password is wrong", 400);
-  console.log(`[Auth] Sign-In successful for user: ${user._id}`);
+  
   const token = generateToken({ userId: user._id, email });
-  console.log(`[Auth] Sign-In response prepared, sending user data with token`);
   res.status(200).json({
     _id: user._id,
     fullName: user.fullName,
@@ -101,7 +109,6 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
 
   if (!email || !otp) throw new AppError("Email and OTP are required", 400);
 
-  // Check OTP validity
   const otpRecord = await OTP.findOne({ email });
 
   if (!otpRecord)
@@ -121,7 +128,7 @@ export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
 
   const token = generateToken({ userId: user._id.toString(), email });
 
-  console.log(`[Auth] Sign-Up verified for user: ${user._id}`);
+  
   res.status(200).json({
     message: "Email verified successfully",
     _id: user._id,
@@ -152,6 +159,227 @@ export const updateProfile = asyncHandler(
       message: "Profile pic updated successfully",
       data: updatedUser,
       sucess: true,
+    });
+  },
+);
+
+export const updateUserProfile = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { fullName, email, profilePic } = req.body;
+    const userId = req.user._id;
+
+    const updateData: any = {};
+    if (fullName) updateData.fullName = fullName;
+    if (email) updateData.email = email;
+
+    if (profilePic && profilePic !== "") {
+      const uploadResponse = await cloudinary.uploader.upload(profilePic);
+      updateData.profilePic = uploadResponse.secure_url;
+    } else if (profilePic === "") {
+      // Explicitly clear profile picture
+      updateData.profilePic = "";
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new AppError("At least one field is required to update", 400);
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    }).select("-password");
+
+    res.status(200).json({
+      message: "Profile updated successfully",
+      data: updatedUser,
+      success: true,
+    });
+  },
+);
+
+export const changePassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email, oldPassword, newPassword } = req.body;
+    const userId = req.user._id;
+
+    if (!oldPassword || !newPassword) {
+      throw new AppError("Old password and new password are required", 400);
+    }
+
+    if (newPassword.length < 6) {
+      throw new AppError("New password must be at least 6 characters", 400);
+    }
+
+    const user = await User.findById(userId);
+    if (!user) throw new AppError("User not found", 404);
+
+    const passwordMatched = await bcrypt.compare(oldPassword, user.password);
+    if (!passwordMatched)
+      throw new AppError("Old password is incorrect", 400);
+
+    const salt = await bcrypt.genSalt(10);
+    const newPasswordHash = await bcrypt.hash(newPassword, salt);
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { password: newPasswordHash },
+      { new: true },
+    ).select("-password");
+
+    
+    res.status(200).json({
+      message: "Password changed successfully",
+      data: updatedUser,
+      success: true,
+    });
+  },
+);
+
+export const forgotPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    if (!email) throw new AppError("Email is required", 400);
+
+    const user = await User.findOne({ email });
+    if (!user) throw new AppError("User not found", 404);
+
+    const otpCode = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+
+    await OTP.deleteOne({ email });
+    
+    
+    await OTP.create({
+      email,
+      otp: otpCode,
+      expiresAt,
+    });
+
+    const emailSent = await sendOtp(email, otpCode);
+    if (!emailSent) {
+      await OTP.deleteOne({ email });
+      throw new AppError("Failed to send OTP. Please try again.", 500);
+    }
+
+    
+    res.status(200).json({
+      message: "OTP sent to your email for password reset",
+      email,
+      success: true,
+    });
+  },
+);
+
+export const resetPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      throw new AppError("Email, OTP, and new password are required", 400);
+    }
+
+    if (newPassword.length < 6) {
+      throw new AppError("Password must be at least 6 characters", 400);
+    }
+
+    // Verify OTP
+    const otpRecord = await OTP.findOne({ email });
+    if (!otpRecord)
+      throw new AppError("OTP not found. Please request a new one.", 400);
+
+    if (new Date() > otpRecord.expiresAt)
+      throw new AppError("OTP has expired. Please request a new one.", 400);
+
+    if (otpRecord.otp !== otp) throw new AppError("Invalid OTP", 400);
+
+    // Find user and reset password
+    const user = await User.findOne({ email });
+    if (!user) throw new AppError("User not found", 404);
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await User.findByIdAndUpdate(user._id, { password: passwordHash });
+    await OTP.deleteOne({ _id: otpRecord._id });
+
+    
+    res.status(200).json({
+      message: "Password reset successfully",
+      success: true,
+    });
+  },
+);
+
+export const sendEmailVerificationOtp = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { newEmail } = req.body;
+    const userId = req.user._id;
+
+    if (!newEmail) throw new AppError("New email is required", 400);
+
+    // Check if new email is already in use
+    const existingUser = await User.findOne({ email: newEmail });
+    if (existingUser) {
+      throw new AppError("Email already in use", 400);
+    }
+
+    const otpCode = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await OTP.deleteOne({ email: newEmail });
+    
+    await OTP.create({
+      email: newEmail,
+      otp: otpCode,
+      expiresAt,
+    });
+
+    const emailSent = await sendOtp(newEmail, otpCode);
+    if (!emailSent) {
+      await OTP.deleteOne({ email: newEmail });
+      throw new AppError("Failed to send OTP. Please try again.", 500);
+    }
+
+    
+    res.status(200).json({
+      message: "OTP sent to your new email address",
+      email: newEmail,
+      success: true,
+    });
+  },
+);
+
+export const verifyAndUpdateEmail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { newEmail, otp } = req.body;
+    const userId = req.user._id;
+
+    if (!newEmail || !otp) {
+      throw new AppError("New email and OTP are required", 400);
+    }
+
+    const otpRecord = await OTP.findOne({ email: newEmail });
+    if (!otpRecord)
+      throw new AppError("OTP not found. Please request a new one.", 400);
+
+    if (new Date() > otpRecord.expiresAt)
+      throw new AppError("OTP has expired. Please request a new one.", 400);
+
+    if (otpRecord.otp !== otp) throw new AppError("Invalid OTP", 400);
+
+    
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { email: newEmail },
+      { new: true },
+    ).select("-password");
+
+    await OTP.deleteOne({ _id: otpRecord._id });
+
+    res.status(200).json({
+      message: "Email updated successfully",
+      data: updatedUser,
+      success: true,
     });
   },
 );

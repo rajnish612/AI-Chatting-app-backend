@@ -14,7 +14,6 @@ export const generateToken = ({
     expiresIn: "30d",
   });
   if (!token) throw new AppError("Unable to generate token", 500);
-  console.log(`[Token] Generated token for user ${userId}`);
   return token;
 };
 

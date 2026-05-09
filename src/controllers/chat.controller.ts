@@ -6,7 +6,21 @@ import AppError from "../lib/AppError";
 import Message, { IMessage } from "../models/message.model";
 import { Types } from "mongoose";
 import { io } from "../lib/socketInstance";
+import { isUserOnline } from "../lib/socketInstance";
 import User from "../models/user.model";
+
+const attachPresence = <T extends { participants?: Array<{ userId: any }> }>(chat: T, currentUserId: string) => {
+  if (!chat?.participants) return chat;
+  return {
+    ...chat,
+    participants: chat.participants.map((participant) => ({
+      ...participant,
+      userId: participant.userId
+        ? { ...participant.userId, isOnline: isUserOnline(participant.userId._id.toString()) }
+        : participant.userId,
+    })),
+  };
+};
 
 export const searchChats = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user._id;
@@ -58,7 +72,7 @@ export const searchChats = asyncHandler(async (req: Request, res: Response) => {
     });
   const response: ApiResponse<IChat[]> = {
     success: true,
-    data: filteredChats,
+    data: filteredChats.map((chat) => attachPresence(chat, userId.toString())),
     message: "successfully fetched chats",
   };
   res.status(200).json(response);
@@ -67,7 +81,7 @@ export const getChats = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user._id;
     const chats = await Chat.find({ "participants.userId": userId })
-      .populate("participants.userId", "_id fullName profilePic")
+          .populate("participants.userId", "_id fullName profilePic botOn")
       .populate("lastMessage")
       .sort({ lastMessageAt: -1 })
       .lean<IChat[]>();
@@ -97,6 +111,12 @@ export const getChats = asyncHandler(
 
         return {
           ...chat,
+          participants: chat.participants.map((participant) => ({
+            ...participant,
+            userId: participant.userId
+              ? { ...participant.userId, isOnline: isUserOnline(participant.userId._id.toString()) }
+              : participant.userId,
+          })),
           unseenCount,
         };
       }),
@@ -120,13 +140,19 @@ export const getParticipants = asyncHandler(
 
     const chat = await Chat.findById(chatId)
       .select("participants")
-      .populate("participants.userId", "_id fullName profilePic")
+        .populate("participants.userId", "_id fullName profilePic botOn")
       .lean();
 
     const filteredParticipants = chat?.participants.filter(
       (participant: any) =>
         participant.userId._id.toString() !== userId.toString(),
-    );
+    ).map((participant: any) => ({
+      ...participant,
+      userId: {
+        ...participant.userId,
+        isOnline: isUserOnline(participant.userId._id.toString()),
+      },
+    }));
     const response: ApiResponse<Types.ObjectId[]> = {
       success: true,
       data: filteredParticipants,
@@ -146,7 +172,7 @@ export const updateLastSeen = asyncHandler(
       { $set: { "participants.$.lastSeen": new Date() } },
       { returnDocument: "after" },
     )
-      .populate("participants.userId", "_id fullName profilePic")
+        .populate("participants.userId", "_id fullName profilePic botOn")
       .select("participants")
       .lean();
     io.to(chatId?.toString()).emit("message-seen", {
@@ -155,7 +181,7 @@ export const updateLastSeen = asyncHandler(
     });
     const response: ApiResponse<IChat> = {
       success: true,
-      data: chat,
+      data: chat ? attachPresence(chat, userId.toString()) : chat,
       message: "successfully fetched chats",
     };
     res.status(200).json(response);
