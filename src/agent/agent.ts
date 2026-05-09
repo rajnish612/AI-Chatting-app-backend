@@ -3,9 +3,7 @@ import { createAgent, tool } from "langchain";
 import Message from "../models/message.model";
 import "../models/user.model";
 import { z } from "zod";
-import { connectDb } from "../lib/db";
 
-connectDb();
 
 const responseSchema = z.object({
   message: z.string(),
@@ -148,55 +146,66 @@ What to do:
 
 const validator = llm.withStructuredOutput(responseSchema);
 
-const runAgent = async () => {
-  const chatId = "69c509b8d236168d73635ff5";
-  const userId = "69a118819dbf5f180bd472d6";
-  const currentMessage = "who are you";
+export const generateAiReply = async (
+  chatId: string,
+  userId: string,
+  currentMessage: string,
+): Promise<{ message: string; error: boolean }> => {
+  try {
+    const rawResponse = await agent.invoke({
+      messages: [
+        {
+          role: "system",
+          content:
+            "The next message is from the other human in the chat. Do not repeat it. Reply only as the bot-enabled user, and make the reply different from the incoming message.",
+        },
+        {
+          role: "user",
+          content: `chatId: ${chatId}\nuserId: ${userId}\nincomingMessage: ${currentMessage}`,
+        },
+      ],
+    });
 
-  const rawResponse = await agent.invoke({
-    messages: [
+    const rawMessages = Array.isArray((rawResponse as any).messages)
+      ? (rawResponse as any).messages
+      : [];
+
+    const rawToolMessage = [...rawMessages]
+      .reverse()
+      .find(
+        (message) =>
+          message?.name === "retrieve_messages" || message?.role === "tool",
+      );
+
+    const rawAiMessage = [...rawMessages]
+      .reverse()
+      .find(
+        (message) => message?.name === "model" || message?.role === "assistant",
+      );
+
+    const validationResult = await validator.invoke([
       {
         role: "system",
-        content:
-          "The next message is from the other human in the chat. Do not repeat it. Reply only as the bot-enabled user, and make the reply different from the incoming message.",
+        content: validatorPrompt,
       },
       {
         role: "user",
-        content: `chatId: ${chatId}\nuserId: ${userId}\nincomingMessage: ${currentMessage}`,
+        content: JSON.stringify(
+          {
+            toolMessage: rawToolMessage?.content ?? null,
+            aiMessage: rawAiMessage?.content ?? null,
+          },
+          null,
+          2,
+        ),
       },
-    ],
-  });
+    ]);
 
-  const rawMessages = Array.isArray((rawResponse as any).messages)
-    ? (rawResponse as any).messages
-    : [];
-
-  const rawToolMessage = [...rawMessages]
-    .reverse()
-    .find((message) => message?.name === "retrieve_messages" || message?.role === "tool");
-
-  const rawAiMessage = [...rawMessages]
-    .reverse()
-    .find((message) => message?.name === "model" || message?.role === "assistant");
-
-  const validationResult = await validator.invoke([
-    {
-      role: "system",
-      content: validatorPrompt,
-    },
-    {
-      role: "user",
-      content: JSON.stringify(
-        {
-          toolMessage: rawToolMessage?.content ?? null,
-          aiMessage: rawAiMessage?.content ?? null,
-        },
-        null,
-        2,
-      ),
-    },
-  ]);
-
-  console.log("response", validationResult);
+    return validationResult;
+  } catch (err: any) {
+    return {
+      message: err.message || "unable to generate reply",
+      error: true,
+    };
+  }
 };
-runAgent();

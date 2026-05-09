@@ -6,6 +6,7 @@ import { ApiResponse } from "../lib/ApiResponse";
 import { io } from "../lib/socketInstance";
 import Chat from "../models/chat.model";
 import { Types } from "mongoose";
+import { generateAiReply } from "../agent/agent";
 export const getMessages = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user._id;
   const chatId = req.query.chatId;
@@ -51,36 +52,60 @@ export const sendTextMessage = asyncHandler(
       { returnDocument: "after" },
     )
       .populate("lastMessage")
-      .populate("participants.userId", "_id fullName profilePic")
+      .populate("participants.userId", "_id fullName profilePic botOn")
       .lean();
-
+    const filteredParticipants = updatedChat.participants.filter(
+      (participant: { userId: { _id: string; botOn: boolean } }) => {
+        return participant.userId._id.toString() !== userId.toString();
+      },
+    );
     await Promise.all(
-      updatedChat.participants.map(async (participant: { userId: { _id: string }; lastSeen?: Date }) => {
-        const participantId = participant.userId._id.toString();
-        const unseenCount =
-          participantId === userId.toString()
-            ? 0
-            : await Message.countDocuments({
-                chatId,
-                createdAt: { $gt: participant.lastSeen || new Date(0) },
-                senderId: { $ne: participant.userId._id },
-              });
+      updatedChat.participants.map(
+        async (participant: { userId: { _id: string }; lastSeen?: Date }) => {
+          const participantId = participant.userId._id.toString();
+          const unseenCount =
+            participantId === userId.toString()
+              ? 0
+              : await Message.countDocuments({
+                  chatId,
+                  createdAt: { $gt: participant.lastSeen || new Date(0) },
+                  senderId: { $ne: participant.userId._id },
+                });
 
-        io.to(participant.userId._id.toString()).emit("chat-update", {
-          chatId,
-          updatedChat: {
-            ...updatedChat,
-            unseenCount,
-          },
-        });
-      }),
+          io.to(participant.userId._id.toString()).emit("chat-update", {
+            chatId,
+            updatedChat: {
+              ...updatedChat,
+              unseenCount,
+            },
+          });
+        },
+      ),
     );
     const response: ApiResponse<IMessage> = {
       success: true,
       data: newMessage,
       message: "message sent",
     };
+
     res.status(200).json(response);
+    if (filteredParticipants[0].userId.botOn) {
+      const aiResponse = await generateAiReply(
+        chatId,
+        filteredParticipants[0].userId._id,
+        message,
+      );
+
+      if (!aiResponse.error && aiResponse.message) {
+        const aiMessage = await Message.create({
+          senderId: filteredParticipants[0].userId._id,
+          text: aiResponse.message,
+          chatId,
+        });
+
+        io.to(chatId).emit("receive-message", { aiMessage });
+      }
+    }
   },
 );
 export const unsendMessage = asyncHandler(

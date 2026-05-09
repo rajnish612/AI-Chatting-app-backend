@@ -8,6 +8,7 @@ export interface IUser {
   profilePic?: String;
   createdAt: Date;
   UpdatedAt: Date;
+  botOn: boolean;
 }
 const userSchema = new mongoose.Schema<IUser>(
   {
@@ -15,6 +16,7 @@ const userSchema = new mongoose.Schema<IUser>(
     email: { type: String, required: true, unique: true, index: true },
     password: { type: String, required: true },
     profilePic: { type: String, default: "" },
+    botOn: { type: Boolean, default: false },
   },
   {
     timestamps: true,
