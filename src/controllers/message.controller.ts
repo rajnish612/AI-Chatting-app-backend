@@ -102,8 +102,43 @@ export const sendTextMessage = asyncHandler(
           text: aiResponse.message,
           chatId,
         });
+        const aiUpdatedChat = await Chat.findByIdAndUpdate(
+          chatId,
+          {
+            $set: { lastMessage: aiMessage._id, lastMessageAt: new Date() },
+          },
+          { returnDocument: "after" },
+        )
+          .populate("lastMessage")
+          .populate("participants.userId", "_id fullName profilePic botOn")
+          .lean();
+        await Promise.all(
+          aiUpdatedChat.participants.map(
+            async (participant: {
+              userId: { _id: string };
+              lastSeen?: Date;
+            }) => {
+              const participantId = participant.userId._id.toString();
+              const unseenCount =
+                participantId === userId.toString()
+                  ? 0
+                  : await Message.countDocuments({
+                      chatId,
+                      createdAt: { $gt: participant.lastSeen || new Date(0) },
+                      senderId: { $ne: participant.userId._id },
+                    });
 
-        io.to(chatId).emit("receive-message", { aiMessage });
+              io.to(participant.userId._id.toString()).emit("chat-update", {
+                chatId,
+                updatedChat: {
+                  ...aiUpdatedChat,
+                  unseenCount,
+                },
+              });
+            },
+          ),
+        );
+        io.to(chatId).emit("receive-message", { message: aiMessage });
       }
     }
   },
