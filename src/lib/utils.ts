@@ -17,3 +17,8 @@ export const generateToken = ({
   console.log(`[Token] Generated token for user ${userId}`);
   return token;
 };
+
+export const generateOTP = (): string => {
+  // Generate a 4-digit OTP
+  return Math.floor(1000 + Math.random() * 9000).toString();
+};

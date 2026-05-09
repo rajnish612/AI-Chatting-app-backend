@@ -2,11 +2,12 @@ import { Request, Response } from "express";
 import asyncHandler from "express-async-handler";
 import AppError from "../lib/AppError";
 import User from "../models/user.model";
+import OTP from "../models/otp.model";
 import bcrypt from "bcryptjs";
-import { generateToken } from "../lib/utils";
+import { generateToken, generateOTP } from "../lib/utils";
+import { sendOtp } from "../lib/NodeMailer";
 import cloudinary from "../lib/cloudinary";
 export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
- 
   res.status(200).json({
     message: "successfully fetched your profile",
     data: req.user,
@@ -24,38 +25,57 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
 
   if (password.length < 6)
     throw new AppError("Password must be length of min 6 characters", 400);
-  const user = await User.findOne({ email: email });
-  if (user) throw new AppError("Email already exists.", 400);
+
+  const existingUser = await User.findOne({ email: email });
+  if (existingUser) {
+    await User.deleteOne({ _id: existingUser._id });
+  }
+
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(password, salt);
+
+  const otpCode = generateOTP();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+
+  await OTP.deleteOne({ email });
+
+  await OTP.create({
+    email,
+    otp: otpCode,
+    expiresAt,
+  });
+
   const newUser = new User({
     fullName,
     email,
     password: passwordHash,
   });
-  if (newUser) {
-    await newUser.save();
 
-    const token = generateToken({ userId: newUser._id, email });
-    res.status(201).json({
-      _id: newUser._id,
-      fullName: newUser.fullName,
-      email: newUser.email,
-      profilePic: newUser.profilePic,
-      token,
-      success: true,
-    });
-  } else {
-    throw new AppError("Unable to create account", 400);
+  await newUser.save();
+
+  const emailSent = await sendOtp(email, otpCode);
+  if (!emailSent) {
+    await User.deleteOne({ _id: newUser._id });
+    await OTP.deleteOne({ email });
+    throw new AppError("Failed to send OTP. Please try again.", 500);
   }
+
+  console.log(`[Auth] Sign-Up OTP sent for user: ${newUser._id}`);
+  res.status(201).json({
+    message: "OTP sent to your email. Please verify to complete signup.",
+    email: newUser.email,
+    success: true,
+  });
 });
 
 export const signIn = asyncHandler(async (req: Request, res: Response) => {
-
   const { email, password } = req.body;
+  console.log("email", email, "password", password);
+
   if (!email || !password)
     throw new AppError("email and password is required", 400);
   const user = await User.findOne({ email: email });
+
   if (!user) throw new AppError("User not found", 400);
   const passwordMatched = await bcrypt.compare(password, user.password);
   if (!passwordMatched) throw new AppError("password is wrong", 400);
@@ -73,10 +93,44 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const signOut = asyncHandler(async (req: Request, res: Response) => {
-  // Token-based auth: client removes token from localStorage
-  // No server-side state to clear
-  console.log(`[Auth] Sign-Out for user: ${req.user?._id}`);
   res.json({ message: "Sign out successful", success: true });
+});
+
+export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
+  const { email, otp }: { email: string; otp: string } = req.body;
+
+  if (!email || !otp) throw new AppError("Email and OTP are required", 400);
+
+  // Check OTP validity
+  const otpRecord = await OTP.findOne({ email });
+
+  if (!otpRecord)
+    throw new AppError("OTP not found. Please sign up again.", 400);
+
+  if (new Date() > otpRecord.expiresAt)
+    throw new AppError("OTP has expired. Please sign up again.", 400);
+
+  if (otpRecord.otp !== otp) throw new AppError("Invalid OTP", 400);
+
+  // OTP verified, delete OTP record
+  await OTP.deleteOne({ _id: otpRecord._id });
+
+  // Fetch user and generate auth token
+  const user = await User.findOne({ email });
+  if (!user) throw new AppError("User not found", 404);
+
+  const token = generateToken({ userId: user._id.toString(), email });
+
+  console.log(`[Auth] Sign-Up verified for user: ${user._id}`);
+  res.status(200).json({
+    message: "Email verified successfully",
+    _id: user._id,
+    fullName: user.fullName,
+    email: user.email,
+    profilePic: user.profilePic,
+    token,
+    success: true,
+  });
 });
 
 export const updateProfile = asyncHandler(
