@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 export interface IMessage {
   _id: mongoose.Schema.Types.ObjectId;
   senderId: mongoose.Schema.Types.ObjectId;
-  receiver: mongoose.Types.ObjectId[];
   text: string;
   type: "text" | "image" | "video" | "audio";
   image: string;
