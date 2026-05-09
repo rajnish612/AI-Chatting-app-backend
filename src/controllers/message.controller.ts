@@ -7,9 +7,12 @@ import { io } from "../lib/socketInstance";
 import Chat from "../models/chat.model";
 import { Types } from "mongoose";
 import { generateAiReply } from "../agent/agent";
+
 export const getMessages = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user._id;
   const chatId = req.query.chatId;
+  const skip = parseInt(req.query.skip as string);
+  console.log("skip", skip);
 
   if (!chatId) throw new AppError("Unable to fetch chats", 400);
   const chat = await Chat.findById(chatId).lean();
@@ -23,11 +26,15 @@ export const getMessages = asyncHandler(async (req: Request, res: Response) => {
   const messages = await Message.find({
     chatId,
     ...(deletedAt && { createdAt: { $gt: deletedAt } }),
-  }).lean<IMessage>();
+  })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .skip(skip)
+    .lean<IMessage[]>();
 
   res.status(200).json({
     message: "successfully fetched messages",
-    data: messages,
+    data: messages.reverse(),
     success: true,
   });
 });
