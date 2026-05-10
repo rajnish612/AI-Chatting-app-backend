@@ -4,7 +4,6 @@ import Message from "../models/message.model";
 import "../models/user.model";
 import { z } from "zod";
 
-
 const responseSchema = z.object({
   message: z.string(),
   error: z.boolean(),
@@ -64,7 +63,7 @@ IMPORTANT:
 );
 
 const llm = new ChatGroq({
-  model: "openai/gpt-oss-20b",
+  model: process.env.GROQ_MODEL as string,
   temperature: 0,
 
   maxTokens: undefined,
@@ -186,7 +185,8 @@ const isUsableHumanReply = (text: string, incomingMessage: string): boolean => {
   const trimmed = text.trim();
   if (!trimmed) return false;
   if (trimmed.length < 2 || trimmed.length > 400) return false;
-  if (trimmed.toLowerCase() === incomingMessage.trim().toLowerCase()) return false;
+  if (trimmed.toLowerCase() === incomingMessage.trim().toLowerCase())
+    return false;
   const lowered = trimmed.toLowerCase();
   if (
     lowered.includes("retrieve_messages") ||
@@ -250,7 +250,9 @@ export const generateAiReply = async (
       );
 
     const aiTextFromMessages = normalizeContent(rawAiMessage?.content);
-    const aiTextFromResponse = normalizeContent((rawResponse as any)?.output_text);
+    const aiTextFromResponse = normalizeContent(
+      (rawResponse as any)?.output_text,
+    );
     const fallbackAiText = aiTextFromMessages || aiTextFromResponse;
 
     let validationResult: { message: string; error: boolean } | null = null;
@@ -277,7 +279,11 @@ export const generateAiReply = async (
       validationResult = null;
     }
 
-    if (validationResult && !validationResult.error && validationResult.message?.trim()) {
+    if (
+      validationResult &&
+      !validationResult.error &&
+      validationResult.message?.trim()
+    ) {
       return validationResult;
     }
 
