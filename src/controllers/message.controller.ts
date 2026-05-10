@@ -9,27 +9,29 @@ import { Types } from "mongoose";
 import { generateAiReply } from "../agent/agent";
 import cloudinary from "../lib/cloudinary";
 
-export const getSharedMedia = asyncHandler(async (req: Request, res: Response) => {
-  const chatId = req.query.chatId as string;
-  const skip = parseInt((req.query.skip as string) || "0");
-  const limit = parseInt((req.query.limit as string) || "20");
-  if (!chatId) throw new AppError("chatId is required", 400);
+export const getSharedMedia = asyncHandler(
+  async (req: Request, res: Response) => {
+    const chatId = req.query.chatId as string;
+    const skip = parseInt((req.query.skip as string) || "0");
+    const limit = parseInt((req.query.limit as string) || "20");
+    if (!chatId) throw new AppError("chatId is required", 400);
 
-  const totalCount = await Message.countDocuments({ chatId, type: "image" });
-  const images = await Message.find({ chatId, type: "image" })
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .lean();
+    const totalCount = await Message.countDocuments({ chatId, type: "image" });
+    const images = await Message.find({ chatId, type: "image" })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-  const response: ApiResponse<any[]> & { totalCount: number } = {
-    success: true,
-    data: images,
-    totalCount,
-    message: "successfully fetched shared media",
-  };
-  res.status(200).json(response);
-});
+    const response: ApiResponse<any[]> & { totalCount: number } = {
+      success: true,
+      data: images,
+      totalCount,
+      message: "successfully fetched shared media",
+    };
+    res.status(200).json(response);
+  },
+);
 
 export const getMessages = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user._id;
@@ -184,12 +186,15 @@ export const unsendMessage = asyncHandler(
     if (message.senderId.toString() !== userId.toString()) {
       throw new AppError("You are not the owner of this message", 403);
     }
+    await Message.deleteOne({ _id: messageId });
+
     const lastMessage = await Message.findOne({
       chatId: message.chatId,
       _id: { $ne: message._id },
     })
       .sort({ createdAt: -1 })
       .lean();
+
     const updatedChat = await Chat.findByIdAndUpdate(
       message.chatId,
       {
@@ -203,15 +208,16 @@ export const unsendMessage = asyncHandler(
       .populate("lastMessage")
       .populate("participants.userId", "_id fullName profilePic")
       .lean();
+
     updatedChat.participants.forEach(
       (participant: { userId: { _id: string } }) => {
         io.to(participant.userId._id.toString()).emit("message-unsend", {
-          chatId: lastMessage.chatId,
+          chatId: message.chatId,
           updatedChat,
         });
       },
     );
-    await Message.deleteOne({ _id: messageId });
+
     io.to(message.chatId.toString()).emit("message-unsent", {
       messageId,
     });
@@ -220,6 +226,8 @@ export const unsendMessage = asyncHandler(
       data: message._id,
       message: "Message deleted",
     };
+    console.log("response", response);
+
     res.status(200).json(response);
   },
 );
@@ -227,7 +235,8 @@ export const unsendMessage = asyncHandler(
 export const sendImageMessage = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const userId = req.user._id;
-    const { imageBase64, chatId }: { imageBase64?: string; chatId?: string } = req.body;
+    const { imageBase64, chatId }: { imageBase64?: string; chatId?: string } =
+      req.body;
 
     const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB limit
 
@@ -239,8 +248,16 @@ export const sendImageMessage = asyncHandler(
 
     if (!chatId) throw new AppError("chatId is required", 400);
 
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      res.status(500).json({ success: false, message: "Cloudinary credentials not configured on server. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET." });
+    if (
+      !process.env.CLOUDINARY_CLOUD_NAME ||
+      !process.env.CLOUDINARY_API_KEY ||
+      !process.env.CLOUDINARY_API_SECRET
+    ) {
+      res.status(500).json({
+        success: false,
+        message:
+          "Cloudinary credentials not configured on server. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET.",
+      });
       return;
     }
 
@@ -248,7 +265,10 @@ export const sendImageMessage = asyncHandler(
     try {
       if (imageBase64) {
         if (!imageBase64.startsWith("data:image/")) {
-          throw new AppError("Invalid image data; expected image data URI (data:image/...)", 400);
+          throw new AppError(
+            "Invalid image data; expected image data URI (data:image/...)",
+            400,
+          );
         }
 
         const approxBytes = Math.round((imageBase64.length * 3) / 4);
@@ -262,8 +282,13 @@ export const sendImageMessage = asyncHandler(
         });
         imageUrl = uploadResponse.secure_url;
       } else if (file) {
-        if (!file.buffer) throw new AppError("Uploaded file missing buffer", 400);
-        if (!file.mimetype || typeof file.mimetype !== "string" || !file.mimetype.startsWith("image/")) {
+        if (!file.buffer)
+          throw new AppError("Uploaded file missing buffer", 400);
+        if (
+          !file.mimetype ||
+          typeof file.mimetype !== "string" ||
+          !file.mimetype.startsWith("image/")
+        ) {
           throw new AppError("Only image files are allowed", 415);
         }
         if (file.buffer.length > MAX_IMAGE_BYTES) {
@@ -280,8 +305,11 @@ export const sendImageMessage = asyncHandler(
       }
     } catch (error: any) {
       const message = error?.message || "Failed to upload image to Cloudinary";
-      const status = error?.statusCode || (error?.code === "ENOTFOUND" ? 502 : 400);
-      res.status(status).json({ success: false, message, detail: error?.stack });
+      const status =
+        error?.statusCode || (error?.code === "ENOTFOUND" ? 502 : 400);
+      res
+        .status(status)
+        .json({ success: false, message, detail: error?.stack });
       return;
     }
 
