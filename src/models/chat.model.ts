@@ -4,19 +4,30 @@ enum ChatType {
   GROUP = "group",
 }
 
+type PopulatedUser = {
+  _id: mongoose.Types.ObjectId;
+  fullName?: string;
+  profilePic?: string;
+  botOn?: boolean;
+  isOnline?: boolean;
+};
+
 type Participant = {
-  userId: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId | PopulatedUser;
   lastSeen: Date;
 };
 export interface IChat {
   _id: mongoose.Types.ObjectId;
   participants: Participant[];
-  lastMessage: {
-    _id: mongoose.Types.ObjectId;
-    text: string;
-    senderId: mongoose.Types.ObjectId;
-    createdAt: Date;
-  };
+  lastMessage:
+    | mongoose.Types.ObjectId
+    | {
+        _id: mongoose.Types.ObjectId;
+        text: string;
+        senderId: mongoose.Types.ObjectId;
+        createdAt: Date;
+      }
+    | null;
   lastMessageAt: Date;
   type: ChatType;
   deletedFor: { userId: mongoose.Types.ObjectId; deletedAt: Date }[];
