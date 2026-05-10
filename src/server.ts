@@ -9,6 +9,7 @@ import userRoutes from "./routes/user.route.js";
 import { app, io, server } from "./lib/socketInstance.js";
 import messageRoutes from "./routes/message.route.js";
 import { globalErrorHandler } from "./lib/globalErrorHandler.js";
+import AppError from "./lib/AppError.js";
 dotenv.config();
 const PORT = process.env.PORT;
 
@@ -25,6 +26,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/user", userRoutes);
+app.use((req: Request, res: Response, next: NextFunction) => {
+  next(new AppError(`Route not found: ${req.originalUrl}`, 404));
+});
 app.use(globalErrorHandler);
 
 async function bootstrap() {

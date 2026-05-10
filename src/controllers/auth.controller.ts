@@ -3,6 +3,8 @@ import asyncHandler from "express-async-handler";
 import AppError from "../lib/AppError";
 import User from "../models/user.model";
 import OTP from "../models/otp.model";
+import Message from "../models/message.model";
+import Chat from "../models/chat.model";
 import bcrypt from "bcryptjs";
 import { generateToken, generateOTP } from "../lib/utils";
 import { sendOtp } from "../lib/NodeMailer";
@@ -28,7 +30,10 @@ export const signUp = asyncHandler(async (req: Request, res: Response) => {
 
   const existingUser = await User.findOne({ email: email });
   if (existingUser) {
-    await User.deleteOne({ _id: existingUser._id });
+    // Prevent creating a new account with an email that's already registered.
+    // Previously the code deleted the existing user which allowed duplicates —
+    // that's unsafe. Require users to sign in or use password reset instead.
+    throw new AppError("Email already in use. Please sign in or reset your password.", 400);
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -103,6 +108,79 @@ export const signIn = asyncHandler(async (req: Request, res: Response) => {
 export const signOut = asyncHandler(async (req: Request, res: Response) => {
   res.json({ message: "Sign out successful", success: true });
 });
+
+export const sendDeleteAccountOtp = asyncHandler(
+  async (req: Request, res: Response) => {
+    const email = req.user?.email as string | undefined;
+    if (!email) throw new AppError("Unauthorized", 401);
+
+    const otpCode = generateOTP();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await OTP.deleteOne({ email });
+    await OTP.create({
+      email,
+      otp: otpCode,
+      expiresAt,
+    });
+
+    const emailSent = await sendOtp(email, otpCode, {
+      subject: "OTP for Account Deletion",
+      introText: "Use this OTP to permanently delete your account",
+    });
+
+    if (!emailSent) {
+      await OTP.deleteOne({ email });
+      throw new AppError("Failed to send deletion OTP. Please try again.", 500);
+    }
+
+    res.status(200).json({
+      message: "Deletion OTP sent to your email",
+      success: true,
+    });
+  },
+);
+
+export const verifyDeleteAccount = asyncHandler(
+  async (req: Request, res: Response) => {
+    const userId = req.user?._id;
+    const email = req.user?.email as string | undefined;
+    const { otp }: { otp?: string } = req.body;
+
+    if (!userId || !email) throw new AppError("Unauthorized", 401);
+    if (!otp) throw new AppError("OTP is required", 400);
+
+    const otpRecord = await OTP.findOne({ email });
+    if (!otpRecord) {
+      throw new AppError("OTP not found. Please request a new one.", 400);
+    }
+
+    if (new Date() > otpRecord.expiresAt) {
+      throw new AppError("OTP has expired. Please request a new one.", 400);
+    }
+
+    if (otpRecord.otp !== otp) {
+      throw new AppError("Invalid OTP", 400);
+    }
+
+    const chats = await Chat.find({ "participants.userId": userId }).select("_id");
+    const chatIds = chats.map((chat) => chat._id);
+
+    if (chatIds.length) {
+      await Message.deleteMany({ chatId: { $in: chatIds } });
+      await Chat.deleteMany({ _id: { $in: chatIds } });
+    }
+
+    await Message.deleteMany({ senderId: userId });
+    await OTP.deleteMany({ email });
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "Account and related data deleted successfully",
+    });
+  },
+);
 
 export const verifyOtp = asyncHandler(async (req: Request, res: Response) => {
   const { email, otp }: { email: string; otp: string } = req.body;
