@@ -43,6 +43,13 @@ io.on("connection", (socket) => {
   socket.on("send-message", async ({ chatId, message }) => {
     socket.to(chatId).emit("receive-message", { message });
   });
+  socket.on("call-end", ({ to, reason }) => {
+    if (!to) return;
+    io.to(to).emit("call-end", {
+      from: socket.data.userId,
+      reason: reason || "ended",
+    });
+  });
   socket.on("disconnect", () => {
     const userId = socket.data.userId;
     if (!userId) return;
