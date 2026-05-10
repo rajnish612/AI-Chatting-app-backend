@@ -118,7 +118,7 @@ export const sendTextMessage = asyncHandler(
     };
 
     res.status(200).json(response);
-    if (filteredParticipants[0].userId.botOn) {
+    if (filteredParticipants[0].userId.botOn && !req.user.botOn) {
       const aiResponse = await generateAiReply(
         chatId,
         filteredParticipants[0].userId._id,
