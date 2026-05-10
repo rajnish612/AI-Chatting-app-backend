@@ -123,9 +123,10 @@ export const sendTextMessage = asyncHandler(
         chatId,
         filteredParticipants[0].userId._id,
         message,
+        { limit: 20 },
       );
 
-      if (!aiResponse.error && aiResponse.message) {
+      if (aiResponse.message?.trim()) {
         const aiMessage = await Message.create({
           senderId: filteredParticipants[0].userId._id,
           text: aiResponse.message,

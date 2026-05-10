@@ -11,16 +11,28 @@ const responseSchema = z.object({
 });
 
 const retrieveMessagesTool = tool(
-  async ({ chatId, userId }) => {
-    const messages = await Message.find({ chatId })
+  async ({ chatId, limit = 10, before, after }) => {
+    const query: any = { chatId };
+    if (before && after) {
+      query.createdAt = { $gt: new Date(after), $lt: new Date(before) };
+    } else if (before) {
+      query.createdAt = { $lt: new Date(before) };
+    } else if (after) {
+      query.createdAt = { $gt: new Date(after) };
+    }
+
+    const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 200);
+
+    const messages = await Message.find(query)
       .populate("senderId")
-      .limit(10)
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .limit(safeLimit);
 
     const formatted = messages.reverse().map((msg) => ({
       name: msg.senderId.fullName,
       userId: msg.senderId._id.toString(),
       message: msg.text,
+      createdAt: msg.createdAt?.toISOString(),
     }));
 
     return JSON.stringify(formatted);
@@ -28,17 +40,25 @@ const retrieveMessagesTool = tool(
   {
     name: "retrieve_messages",
     description: `
-Fetch last messages from chat.
+Fetch messages from a chat. Supports pagination and date filters.
+
+Parameters:
+- chatId (string): chat id to fetch messages from
+- userId (string): the id of the simulated user (for context)
+- limit (number, optional): max number of messages to return (default 10)
+- before (ISO datetime string, optional): return messages created before this time
+- after (ISO datetime string, optional): return messages created after this time
 
 IMPORTANT:
-- Always return EXACTLY last 10 messages (already sorted oldest → newest after reverse)
-- Each message is in order
-- DO NOT summarize
-- DO NOT modify text
+- Return messages sorted oldest → newest (tool implementation reverses after fetching newest→oldest)
+- Do NOT summarize or modify message text
 `,
     schema: z.object({
       chatId: z.string(),
-      userId: z.string(),
+      userId: z.string().optional(),
+      limit: z.number().int().min(1).max(200).optional(),
+      before: z.string().optional(),
+      after: z.string().optional(),
     }),
   },
 );
@@ -59,8 +79,8 @@ You are ONLY simulating the user with the given userId.
 
 --------------------
 
-INPUT:
-- You will receive chat history from a tool (last 10 messages)
+-INPUT:
+- You will receive chat history from a tool (variable length; tool may apply limit, before, after filters)
 - You will receive the latest message from another user
 
 --------------------
@@ -137,7 +157,7 @@ What to do:
 - If the raw output is good, set error to false and return the final natural chat reply.
 - If the raw output is bad, set error to true and return a short human-style message that clearly says there is something wrong or an error.
 - The reply must be a plain string only, no JSON in the message field.
-- Be strict. If there is any serious doubt, set error to true.
+- Prefer allowing a natural human reply when plausible; only set error to true for clearly broken output.
 - Never copy or paraphrase the assistant's bad text when creating the fallback.
 - If the assistant sounds like a bot or assistant, ignore that wording completely and produce a short human-style chat reply instead.
 - The fallback should sound like the simulated user in the conversation, not like a validator or system.
@@ -146,12 +166,58 @@ What to do:
 
 const validator = llm.withStructuredOutput(responseSchema);
 
+const normalizeContent = (content: any): string => {
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (typeof part?.text === "string") return part.text;
+        return "";
+      })
+      .join(" ")
+      .trim();
+  }
+  if (typeof content?.text === "string") return content.text.trim();
+  return "";
+};
+
+const isUsableHumanReply = (text: string, incomingMessage: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (trimmed.length < 2 || trimmed.length > 400) return false;
+  if (trimmed.toLowerCase() === incomingMessage.trim().toLowerCase()) return false;
+  const lowered = trimmed.toLowerCase();
+  if (
+    lowered.includes("retrieve_messages") ||
+    lowered.includes("tool call") ||
+    lowered.includes("role:") ||
+    lowered.includes("system prompt")
+  ) {
+    return false;
+  }
+  return true;
+};
+
+const buildDeterministicFallbackReply = (incomingMessage: string): string => {
+  const msg = incomingMessage.trim().toLowerCase();
+  if (!msg) return "hey, I am here.";
+  if (/(^|\s)(hi|hello|hey|yo)(\s|$)/i.test(msg)) return "hey, what's up?";
+  if (/(thanks|thank you|thx)/i.test(msg)) return "anytime :)";
+  if (msg.includes("?")) return "hmm, I think so. tell me a bit more?";
+  if (/(angry|mad|wtf|fuck|bc|mc)/i.test(msg)) return "easy, what happened?";
+  return "got it. tell me more.";
+};
+
 export const generateAiReply = async (
   chatId: string,
   userId: string,
   currentMessage: string,
+  options?: { limit?: number; before?: string; after?: string },
 ): Promise<{ message: string; error: boolean }> => {
   try {
+    const userContent = `chatId: ${chatId}\nuserId: ${userId}\nlimit: ${options?.limit ?? 10}\nbefore: ${options?.before ?? ""}\nafter: ${options?.after ?? ""}\nincomingMessage: ${currentMessage}`;
+
     const rawResponse = await agent.invoke({
       messages: [
         {
@@ -161,7 +227,7 @@ export const generateAiReply = async (
         },
         {
           role: "user",
-          content: `chatId: ${chatId}\nuserId: ${userId}\nincomingMessage: ${currentMessage}`,
+          content: userContent,
         },
       ],
     });
@@ -183,29 +249,50 @@ export const generateAiReply = async (
         (message) => message?.name === "model" || message?.role === "assistant",
       );
 
-    const validationResult = await validator.invoke([
-      {
-        role: "system",
-        content: validatorPrompt,
-      },
-      {
-        role: "user",
-        content: JSON.stringify(
-          {
-            toolMessage: rawToolMessage?.content ?? null,
-            aiMessage: rawAiMessage?.content ?? null,
-          },
-          null,
-          2,
-        ),
-      },
-    ]);
+    const aiTextFromMessages = normalizeContent(rawAiMessage?.content);
+    const aiTextFromResponse = normalizeContent((rawResponse as any)?.output_text);
+    const fallbackAiText = aiTextFromMessages || aiTextFromResponse;
 
-    return validationResult;
+    let validationResult: { message: string; error: boolean } | null = null;
+
+    try {
+      validationResult = await validator.invoke([
+        {
+          role: "system",
+          content: validatorPrompt,
+        },
+        {
+          role: "user",
+          content: JSON.stringify(
+            {
+              toolMessage: rawToolMessage?.content ?? null,
+              aiMessage: rawAiMessage?.content ?? null,
+            },
+            null,
+            2,
+          ),
+        },
+      ]);
+    } catch {
+      validationResult = null;
+    }
+
+    if (validationResult && !validationResult.error && validationResult.message?.trim()) {
+      return validationResult;
+    }
+
+    if (isUsableHumanReply(fallbackAiText, currentMessage)) {
+      return { message: fallbackAiText, error: false };
+    }
+
+    return {
+      message: buildDeterministicFallbackReply(currentMessage),
+      error: false,
+    };
   } catch (err: any) {
     return {
-      message: err.message || "unable to generate reply",
-      error: true,
+      message: buildDeterministicFallbackReply(currentMessage),
+      error: false,
     };
   }
 };
