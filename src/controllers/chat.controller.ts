@@ -22,6 +22,12 @@ const attachPresence = <T extends { participants?: Array<{ userId: any }> }>(cha
   };
 };
 
+const getLastMessageCreatedAt = (chat: IChat): Date | null => {
+  const message = chat.lastMessage;
+  if (!message || message instanceof Types.ObjectId) return null;
+  return message.createdAt ?? null;
+};
+
 export const searchChats = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user._id;
   const query = req.query.q as string;
@@ -66,9 +72,10 @@ export const searchChats = asyncHandler(async (req: Request, res: Response) => {
 
       if (!deletedEntry) return true;
 
-      if (!chat.lastMessage) return false;
+      const lastMessageCreatedAt = getLastMessageCreatedAt(chat);
+      if (!lastMessageCreatedAt) return false;
 
-      return chat.lastMessage.createdAt > deletedEntry.deletedAt;
+      return lastMessageCreatedAt > deletedEntry.deletedAt;
     });
   const response: ApiResponse<IChat[]> = {
     success: true,
@@ -92,9 +99,10 @@ export const getChats = asyncHandler(
 
       if (!deletedEntry) return true;
 
-      if (!chat.lastMessage) return false;
+      const lastMessageCreatedAt = getLastMessageCreatedAt(chat);
+      if (!lastMessageCreatedAt) return false;
 
-      return chat.lastMessage.createdAt > deletedEntry.deletedAt;
+      return lastMessageCreatedAt > deletedEntry.deletedAt;
     });
     const chatsWithUnread = await Promise.all(
       filteredChats.map(async (chat) => {
